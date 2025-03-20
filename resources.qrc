@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/tiff_generator" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
