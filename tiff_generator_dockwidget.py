@@ -28,6 +28,8 @@ from qgis.PyQt.QtCore import pyqtSignal, QDate, Qt
 from qgis.core import QgsProject, QgsVectorLayer, QgsFeature, QgsGeometry, QgsPointXY, QgsRasterLayer
 from qgis.gui import QgsMapToolEmitPoint
 import ee
+import tempfile
+import requests
 
 # Cargar la UI generada con Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
@@ -269,75 +271,65 @@ class PreAndPostFireTiffGeneratorDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         return image.set('time_start', image.get('system:time_start'))
 
     def get_fire_images(self, start_date, end_date, buffer_distance):
-        area = max(self.area_input.value(), 0.0001)  # Evitar valores extremadamente pequeños
-        buffer_size = ee.Number(area).log().multiply(3000).max(3000)  # Asegurar tamaño válido
+        area = max(self.area_input.value(), 0.0001)  
+        buffer_size = ee.Number(area).log().multiply(3000).max(3000)  
         region = ee.Geometry.Point([self.ignition_point.x(), self.ignition_point.y()]).buffer(buffer_size)
-
         
-        # Cargar imágenes Landsat 5, 7, 8 y 9
         L5_col = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2') \
             .map(self.applyScaleFactors).map(self.harmonizeBands).map(self.maskClouds) \
             .map(lambda img: self.get_INDEX(img, 'L5')) \
             .map(lambda img: self.renameBands(img, 'L5'))
 
-        # Landsat 7 (only up to 2003)
         L7_col = ee.ImageCollection('LANDSAT/LE07/C02/T1_L2') \
             .filterDate('1999-01-01', '2003-05-31') \
             .map(self.applyScaleFactors).map(self.harmonizeBands).map(self.maskClouds) \
             .map(lambda img: self.get_INDEX(img, 'L7')) \
             .map(lambda img: self.renameBands(img, 'L7'))
 
-        # Landsat 8
         L8_col = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2') \
             .map(self.applyScaleFactors).map(self.harmonizeBands).map(self.maskClouds) \
             .map(lambda img: self.get_INDEX(img, 'L8')) \
             .map(lambda img: self.renameBands(img, 'L8'))
 
-        # Landsat 9
         L9_col = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2') \
             .map(self.applyScaleFactors).map(self.harmonizeBands).map(self.maskClouds) \
             .map(lambda img: self.get_INDEX(img, 'L9')) \
             .map(lambda img: self.renameBands(img, 'L9'))
 
-        # Merge all Landsat collections
         sat = L5_col.merge(L7_col).merge(L8_col).merge(L9_col)
 
-        # Definir mosaicos pre y post-incendio
         mosaicpre = sat.filterBounds(region).filterDate(ee.Date(start_date).advance(-365, 'day'), ee.Date(start_date)).map(lambda img: self.adddate(img)).sort('system:time_start', True)
         mosaicpos = sat.filterBounds(region).filterDate(ee.Date(end_date), ee.Date(end_date).advance(180, 'day')).map(lambda img: self.adddate(img)).sort('system:time_start', False)
 
-         # Create pre-fire and post-fire image mosaics, clipped to the study area
         pref = mosaicpre.mosaic().clip(region)
         postf = mosaicpos.mosaic().clip(region)
 
-        # 🔹 Prepare images for export
         PREImagen = pref.select(['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL']).toFloat()
         POSImagen = postf.select(['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL']).toFloat()
         
-        output_folder = os.path.dirname(__file__)
-        pre_path = os.path.join(output_folder, f"ImgPreF_{start_date}.tif")
-        post_path = os.path.join(output_folder, f"ImgPosF_{end_date}.tif")
+        temp_dir = tempfile.gettempdir()
+        pre_path = os.path.join(temp_dir, f"ImgPreF_{start_date}.tif")
+        post_path = os.path.join(temp_dir, f"ImgPosF_{end_date}.tif")
 
-        print(f"💾 Descargando imágenes en: {pre_path} y {post_path}")
+        print(f"💾 Descargando imágenes en archivos temporales: {pre_path} y {post_path}")
 
-        # 🔹 Descargar imágenes en la carpeta del plugin
         pre_url = PREImagen.getDownloadUrl({
             'scale': 30,
-            'region': region.bounds().getInfo()['coordinates'],  # Corregir el problema de ubicación
-            'crs': 'EPSG:4326',  # Asegurar que la proyección sea correcta
+            'bands': ['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL'],
+            'region': region.bounds().getInfo()['coordinates'],
+            'crs': 'EPSG:4326',
             'format': 'GeoTIFF'
         })
 
         post_url = POSImagen.getDownloadUrl({
             'scale': 30,
-            'region': region.bounds().getInfo()['coordinates'],  # Corregir el problema de ubicación
-            'crs': 'EPSG:4326',  # Asegurar que la proyección sea correcta
+            'bands': ['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL'],
+            'region': region.bounds().getInfo()['coordinates'],
+            'crs': 'EPSG:4326',
             'format': 'GeoTIFF'
         })
-        
-        # Descargar imágenes usando requests
-        import requests
 
+        
         def download_image(url, output_path):
             response = requests.get(url, stream=True)
             if response.status_code == 200:
@@ -357,7 +349,7 @@ class PreAndPostFireTiffGeneratorDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             self.add_raster_to_qgis(pre_path, f"Pre-Fire {start_date}")
             self.add_raster_to_qgis(post_path, f"Post-Fire {end_date}")
 
-        print("✅ Descarga de imágenes completada y agregadas a QGIS.")
+        print("✅ Descarga de imágenes temporales completada y agregadas a QGIS.")
 
     def add_raster_to_qgis(self, file_path, layer_name):
         """
