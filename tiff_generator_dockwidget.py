@@ -272,7 +272,8 @@ class PreAndPostFireTiffGeneratorDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
     def get_fire_images(self, start_date, end_date, buffer_distance):
         area = max(self.area_input.value(), 0.0001)  
-        buffer_size = ee.Number(area).log().multiply(3000).max(3000)  
+        #buffer_size = ee.Number(area).log().multiply(3000).max(3000) 
+        buffer_size = ee.Number(163673.1).multiply(ee.Number(1).subtract(ee.Number(-0.001157413).multiply(ee.Number(area).pow(0.5259879)).exp()))  
         region = ee.Geometry.Point([self.ignition_point.x(), self.ignition_point.y()]).buffer(buffer_size)
         
         L5_col = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2') \
