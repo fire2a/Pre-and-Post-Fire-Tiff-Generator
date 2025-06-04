@@ -305,8 +305,8 @@ class PreAndPostFireTiffGeneratorDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         pref = mosaicpre.mosaic().clip(region)
         postf = mosaicpos.mosaic().clip(region)
 
-        PREImagen = pref.select(['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL']).toFloat()
-        POSImagen = postf.select(['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL']).toFloat()
+        PREImagen = pref.select(['B', 'G', 'R', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR']).toFloat()
+        POSImagen = postf.select(['B', 'G', 'R', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR']).toFloat()
         
         temp_dir = tempfile.gettempdir()
         pre_path = os.path.join(temp_dir, f"ImgPreF_{start_date}.tif")
@@ -316,7 +316,7 @@ class PreAndPostFireTiffGeneratorDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         pre_url = PREImagen.getDownloadUrl({
             'scale': 30,
-            'bands': ['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL'],
+            'bands': ['B', 'G', 'R', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR'],
             'region': region.bounds().getInfo()['coordinates'],
             'crs': 'EPSG:4326',
             'format': 'GeoTIFF'
@@ -324,7 +324,7 @@ class PreAndPostFireTiffGeneratorDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         post_url = POSImagen.getDownloadUrl({
             'scale': 30,
-            'bands': ['R', 'G', 'B', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR', 'QA_PIXEL'],
+            'bands': ['B', 'G', 'R', 'NIR', 'SWIR1', 'SWIR2', 'NDVI', 'NBR'],
             'region': region.bounds().getInfo()['coordinates'],
             'crs': 'EPSG:4326',
             'format': 'GeoTIFF'
